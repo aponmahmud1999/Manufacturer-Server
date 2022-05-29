@@ -35,6 +35,9 @@ async function run(){
         await client.connect();
         const productCollection = client.db("cars-parts").collection("products")
         const userCollection = client.db("cars-parts").collection("users")
+        const orderCollection = client.db("cars-parts").collection("orders")
+        const paymentCollection = client.db("cars-parts").collection("payments")
+        const reviewCollection = client.db("cars-parts").collection("reviews")
 
 
 
@@ -126,6 +129,99 @@ async function run(){
             const token = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1d' })
             res.send({ result, token })
         })
+        app.get('/order', verifyJWT, async (req, res) => {
+            const user = req.query.email;
+            const decodedEmail = req.decoded.email
+            if (user === decodedEmail) {
+                const query = { email: user }
+                const orders = await orderCollection.find(query).toArray()
+                res.send(orders)
+            }
+            else if (!user) {
+                const result = await orderCollection.find().toArray();
+                res.send(result)
+            }
+            else {
+                return res.status(403).send({ message: "Forbidden access" })
+            }
+        })
+        app.post('/order', verifyJWT, async (req, res) => {
+            const booking = req.body;
+            const result = await orderCollection.insertOne(booking);
+            res.send(result)
+        })
+
+        app.get('/order/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id
+            const query = { _id: ObjectId(id) }
+            const booking = await orderCollection.findOne(query)
+            res.send(booking)
+        })
+        app.delete('/order/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const booking = await orderCollection.deleteOne(filter)
+            res.send(booking)
+        })
+
+        app.patch('/order/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id
+            const payment = req.body
+            const filter = { _id: ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: 'paid',
+                    transactionId: payment.transactionId
+                },
+            };
+            const result = await paymentCollection.insertOne(payment)
+            const updatedBooking = await orderCollection.updateOne(filter, updateDoc)
+            res.send(updateDoc)
+        })
+        app.put('/order/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id
+            const filter = { _id: ObjectId(id) }
+            const updateDoc = {
+                $set: {
+                    status: 'ship'
+                },
+            };
+            const updatedBooking = await orderCollection.updateOne(filter, updateDoc)
+            res.send(updateDoc)
+        })
+
+        //PAYMENT
+        app.post('/create-payment-intent', verifyJWT, async (req, res) => {
+            const product = req.body;
+            const price = product.price;
+            const amount = price * 100;
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            });
+            res.send({ clientSecret: paymentIntent.client_secret })
+        });
+
+        // Reviews
+        app.get("/reviews", async (req, res) => {
+            const user = req.query.email;
+            if (user) {
+                const query = { email: user }
+                const result = await reviewCollection.find(query).toArray()
+                res.send(result)
+            }
+            else {
+                const result = await reviewCollection.find().toArray();
+                res.send(result)
+            }
+        });
+        app.post("/reviews", async (req, res) => {
+            const review = req.body;
+            const result = await reviewCollection.insertOne(review);
+            res.send(result);
+        });
+ 
 
 
     }
