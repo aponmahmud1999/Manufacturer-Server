@@ -34,7 +34,7 @@ async function run(){
 
         await client.connect();
         const productCollection = client.db("cars-parts").collection("products")
-        const userCollection = client.db("electronics-lab").collection("users")
+        const userCollection = client.db("cars-parts").collection("users")
 
 
 
@@ -80,6 +80,53 @@ async function run(){
             const result = await productCollection.deleteOne(filter)
             res.send(result)
         })
+        app.get('/user', verifyJWT, verifyAdmin, async (req, res) => {
+            const users = await userCollection.find().toArray()
+            res.send(users)
+        })
+        app.get('/user/:email', async (req, res) => {
+            const email = req.params.email
+            const query = { email: email }
+            const users = await userCollection.findOne(query)
+            res.send(users)
+        })
+        app.delete('/user/:email', verifyJWT, verifyAdmin, async (req, res) => {
+            const email = req.params.email
+            const filter = { email: email }
+            const users = await userCollection.deleteOne(filter)
+            res.send(users)
+        })
+
+        app.put('/user/admin/:email', verifyJWT, verifyAdmin, async (req, res) => {
+            const email = req.params.email
+            const filter = { email: email }
+            const updateDoc = {
+                $set: { role: 'admin' },
+            };
+            const result = await userCollection.updateOne(filter, updateDoc)
+            res.send(result)
+        })
+
+        app.get('/admin/:email', verifyJWT, async (req, res) => {
+            const email = req.params.email
+            const user = await userCollection.findOne({ email: email })
+            const isAdmin = user.role === 'admin'
+            res.send(isAdmin)
+        })
+
+        app.put('/user/:email', async (req, res) => {
+            const email = req.params.email
+            const user = req.body
+            const filter = { email: email }
+            const options = { upsert: true }
+            const updateDoc = {
+                $set: user,
+            };
+            const result = await userCollection.updateOne(filter, updateDoc, options)
+            const token = jwt.sign({ email: email }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1d' })
+            res.send({ result, token })
+        })
+
 
     }
     finally{
